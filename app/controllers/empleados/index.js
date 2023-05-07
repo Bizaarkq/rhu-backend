@@ -77,8 +77,9 @@ exports.crearEmpleado = async (req, res) => {
 exports.obtenerEmpleado = async (req, res) => {
     const id = req.params.id;
     try {
-        let empleado = await Empleados.find({ codigo: id }).populate('datos_laborales.cargo');
+        let empleado = await Empleados.find({ _id : id }).populate('datos_laborales.cargo');
 
+        empleado = empleado.length === 0 ?  await Empleados.find({ codigo: id }).populate('datos_laborales.cargo') : empleado;
         empleado = empleado.length === 0 ?  await Empleados.find({ 'datos_personales.dui': id }).populate('datos_laborales.cargo') : empleado;
         empleado = empleado.length === 0 ?  await Empleados.find({ 'datos_personales.nit': id }).populate('datos_laborales.cargo') : empleado;
 
@@ -86,7 +87,7 @@ exports.obtenerEmpleado = async (req, res) => {
             return res.status(200).json({
                 ok: true,
                 message: 'Empleado encontrado',
-                empleado
+                empleado: empleado[0],
             });
         }else{
             return res.status(404).json({
