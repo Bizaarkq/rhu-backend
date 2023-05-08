@@ -1,4 +1,4 @@
-const {Empleados, plazas} = require('../../models');
+const {Empleados, Plazas} = require('../../models');
 
 exports.crearEmpleado = async (req, res) => {
 
@@ -19,6 +19,11 @@ exports.crearEmpleado = async (req, res) => {
             datos_bancarios,
             datos_afiliacion
         } = req.body;
+
+        datos_laborales = {
+            ...datos_laborales,
+            cargo: datos_laborales.cargo.value
+        }
 
         const last_codigo = await Empleados.find({}).sort({codigo: -1}).limit(1);
 
@@ -123,8 +128,15 @@ exports.obtenerEmpleados = async (req, res) => {
 
 exports.actualizarEmpleado = async (req, res) => {
     try{
+        const peticion = {
+            ...req.body,
+            datos_laborales: {
+                ...req.body.datos_laborales,
+                cargo: req.body.datos_laborales.cargo.value
+            }
+        }
 
-        let empleado = await Empleados.findOneAndUpdate({_id: req.params.id}, req.body, {new: true});
+        let empleado = await Empleados.findOneAndUpdate({_id: req.params.id}, peticion, {new: true});
 
         return res.status(200).json({
             ok: true,
@@ -133,6 +145,7 @@ exports.actualizarEmpleado = async (req, res) => {
         });
         
     }catch (e) {
+        console.log(e);
         return res.status(500).json({
             ok: false,
             message: 'Error interno del servidor'

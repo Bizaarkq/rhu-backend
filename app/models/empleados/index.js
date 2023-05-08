@@ -71,10 +71,6 @@ const empleadoSchema = new Schema({
             type: String,
             required: true
         },
-        nit: {
-            type: String,
-            required: true
-        },
         direccion: String,
         telefono: String,
         correo: String
