@@ -16,7 +16,8 @@ const indemnizacionesSchema = new Schema({
     },
     empleado: {
         type: Schema.Types.ObjectId,
-        required: true
+        required: true,
+        ref: 'empleados'
     }
 });
 

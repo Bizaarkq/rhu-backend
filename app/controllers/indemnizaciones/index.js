@@ -17,7 +17,6 @@ exports.crearIndemnizacion = async (req, res) => {
         const idCargo = empleado.datos_laborales.cargo;
         const plaza = await Plazas.findOne({ _id: idCargo});
         const salario = parseInt(plaza.salario);
-        console.log(salario)
         // logica indemnizacion
         const anioActual = moment().format('YYYY');
         const finAnio = moment(`${anioActual}-12-31`);
@@ -25,7 +24,6 @@ exports.crearIndemnizacion = async (req, res) => {
         const fecha_contratacion = moment(empleado.datos_laborales.fecha_ingreso);
         // caso de despido
         if( empleado.datos_laborales.fecha_salida != null ){
-            console.log('xxxxxxxxxxxxxxx');
             const salida = moment(empleado.datos_laborales.fecha_salida);
             const mesesTrabajados = salida.diff(fecha_contratacion, 'months');
             if(mesesTrabajados < 12){
@@ -65,10 +63,8 @@ exports.crearIndemnizacion = async (req, res) => {
             });
         }
         if(aniosTrabajados >= 2){
-            console.log('aaaaaaaaaaaaaaaaa')
             indemnizacionCalculada = salario;
         }else{
-            console.log('bbbbbbbbbbbbbbbbbb');
             const salarioPorDia = salario/360;
             const anio = fecha_contratacion.add(1, 'year');
             const diasRestantesDelAnio = finAnio.diff(anio, 'days');
@@ -104,24 +100,12 @@ exports.crearIndemnizacion = async (req, res) => {
 exports.obtenerIndemnizacion = async (req, res) => {
     const id = req.params.id;
     try {
-        let empleado = await Empleados.find({ _id : id }).populate('datos_laborales.cargo');
-
-        empleado = empleado.length === 0 ?  await Empleados.find({ codigo: id }).populate('datos_laborales.cargo') : empleado;
-        empleado = empleado.length === 0 ?  await Empleados.find({ 'datos_personales.dui': id }).populate('datos_laborales.cargo') : empleado;
-        empleado = empleado.length === 0 ?  await Empleados.find({ 'datos_personales.nit': id }).populate('datos_laborales.cargo') : empleado;
-
-        if (empleado.length > 0) {
-            return res.status(200).json({
-                ok: true,
-                message: 'Empleado encontrado',
-                empleado: empleado[0],
-            });
-        }else{
-            return res.status(404).json({
-                ok: false,
-                message: 'Empleado no encontrado'
-            });
-        }
+        const indemnizacion = await Indemnizaciones.find({ _id : id }).populate('empleado');
+        return res.status(200).json({
+            ok: true,
+            message: 'Indemnización encontrada',
+            indemnizacion
+        });
     }catch (e) {
         console.log(e);
         return res.status(500).json({
@@ -131,41 +115,14 @@ exports.obtenerIndemnizacion = async (req, res) => {
     }
 }
 
-exports.obtenerIndemnizaciones = async (req, res) => {
+exports.getIndemnizaciones = async (req, res) => {
     try {
-        let empleado = await Empleados.find({}).populate('datos_laborales.cargo');
+        let indemnizaciones = await Indemnizaciones.find({}).populate('empleado');
         return res.status(200).json({
             ok: true,
-            message: 'Empleados encontrados',
-            empleado
+            message: 'Indemnizaciones encontradas',
+            indemnizaciones
         });
-    }catch (e) {
-        console.log(e);
-        return res.status(500).json({
-            ok: false,
-            message: 'Error interno del servidor'
-        });
-    }
-}
-
-exports.actualizarIndemnizacion = async (req, res) => {
-    try{
-        const peticion = {
-            ...req.body,
-            datos_laborales: {
-                ...req.body.datos_laborales,
-                cargo: req.body.datos_laborales.cargo.value
-            }
-        }
-
-        let empleado = await Empleados.findOneAndUpdate({_id: req.params.id}, peticion, {new: true});
-
-        return res.status(200).json({
-            ok: true,
-            message: 'Empleado actualizado con éxito',
-            empleado
-        });
-        
     }catch (e) {
         console.log(e);
         return res.status(500).json({
