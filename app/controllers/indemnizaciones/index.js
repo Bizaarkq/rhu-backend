@@ -2,11 +2,10 @@ const {Indemnizaciones, Empleados, Plazas} = require('../../models');
 const moment = require('moment');
 
 exports.crearIndemnizacion = async (req, res) => {
-
     try {
-        const { dui } = req.body;
+        const { empleado: { value } } = req.body;
         // validamos que el empleado exista
-        const empleado = await Empleados.findOne({ 'datos_personales.dui': dui });
+        const empleado = await Empleados.findOne({_id: value})
         if (!empleado) {
             return res.status(400).json({
                 ok: false,
@@ -39,7 +38,7 @@ exports.crearIndemnizacion = async (req, res) => {
             let indemnizacion = new Indemnizaciones({
                 fecha_contratacion,
                 fecha_finalizacion: salida,
-                indemnizacion: indemnizacionCalculada,
+                indemnizacion: indemnizacionCalculada.toFixed(2),
                 empleado: empleado._id,
             });
 
@@ -73,7 +72,7 @@ exports.crearIndemnizacion = async (req, res) => {
 
         let indemnizacion = new Indemnizaciones({
             fecha_contratacion,
-            indemnizacion: indemnizacionCalculada,
+            indemnizacion: indemnizacionCalculada.toFixed(2),
             empleado: empleado._id,
         });
 
