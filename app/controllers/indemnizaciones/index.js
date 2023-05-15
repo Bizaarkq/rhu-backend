@@ -99,7 +99,7 @@ exports.crearIndemnizacion = async (req, res) => {
 exports.obtenerIndemnizacion = async (req, res) => {
     const id = req.params.id;
     try {
-        const indemnizacion = await Indemnizaciones.find({ _id : id }).populate('empleado');
+        const indemnizacion = await Indemnizaciones.findOne({ _id : id }).populate('empleado');
         return res.status(200).json({
             ok: true,
             message: 'Indemnización encontrada',
