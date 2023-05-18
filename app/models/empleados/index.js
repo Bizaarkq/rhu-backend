@@ -17,9 +17,18 @@ const incapacidadSchema = new Schema({
 
 const pagoSchema = new Schema({
     fecha: Date,
+    correlativo: {
+        anio: Number,
+        mes: Number,
+        quincena: Number
+    },
     motivo: String,
     dias_trabajados: Number,
+    salario_neto: mongoose.Types.Decimal128,
+    salario_bruto: mongoose.Types.Decimal128,
     salario_quincenal: mongoose.Types.Decimal128,
+    ss_base_calculo: mongoose.Types.Decimal128,
+    isr_base_calculo: mongoose.Types.Decimal128,
     incapacidad: {
         dias: Number,
         remunerado: mongoose.Types.Decimal128,
@@ -30,11 +39,12 @@ const pagoSchema = new Schema({
         descuento: mongoose.Types.Decimal128
     },
     extra: mongoose.Types.Decimal128,
-    prima_vacacion: mongoose.Types.Decimal128,
-    otros_ingresos: {
-        gravados: mongoose.Types.Decimal128,
-        exentos: mongoose.Types.Decimal128
+    vacacion: {
+        dias: Number,
+        prima: mongoose.Types.Decimal128
     },
+    otros_ingresos: mongoose.Types.Decimal128,
+    ingresos_no_gravados: mongoose.Types.Decimal128,
     insaforp: mongoose.Types.Decimal128,
     isss: {
         patrono: mongoose.Types.Decimal128,
