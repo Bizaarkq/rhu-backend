@@ -111,7 +111,16 @@ exports.obtenerEmpleado = async (req, res) => {
 
 exports.obtenerEmpleados = async (req, res) => {
     try {
-        let empleado = await Empleados.find({}).populate('datos_laborales.cargo');
+        let empleado = await Empleados.find({
+            $or: [
+                {
+                  "datos_laborales.fecha_salida": {
+                    $exists: false,
+                  },
+                },
+                { "datos_laborales.fecha_salida": null },
+            ]
+        }).populate('datos_laborales.cargo');
         return res.status(200).json({
             ok: true,
             message: 'Empleados encontrados',
@@ -185,6 +194,120 @@ exports.despedirEmpleado = async (req, res) => {
         }
         
     }catch (e) {
+        return res.status(500).json({
+            ok: false,
+            message: 'Error interno del servidor'
+        });
+    }
+}
+
+exports.obtenerEmpleadosBoletas = async (req, res) => {
+    try {
+        let empleados = await Empleados
+        .find({})
+        .select('datos_personales datos_laborales pagos codigo')
+        .populate('datos_laborales.cargo')
+        .lean()
+        .then(empleados => {
+            return empleados.map(empleado => {
+                return {
+                    ...empleado,
+                    estado: empleado.datos_laborales.fecha_salida ? 'Despedido' : 'Activo',
+                    pagos : empleado.pagos.map(pago => {
+                        return {
+                            id: pago._id,
+                            fecha: pago.fecha,
+                            correlativo: pago.correlativo.anio + ""
+                            + `0${pago.correlativo.mes}`.slice(-2) + ""
+                            + empleado.codigo + ""
+                            + pago.correlativo.quincena,
+                            incapacidad: parseFloat(pago.incapacidad.obligatorio).toFixed(2),
+                            salario_quincenal: parseFloat(pago.salario_quincenal).toFixed(2),
+                            vacacion: parseFloat(pago.vacacion?.prima).toFixed(2),
+                            otros_ingresos: parseFloat(pago.otros_ingresos).toFixed(2),
+                            isss: parseFloat(pago.isss.empleado).toFixed(2),
+                            afp: parseFloat(pago.afp.empleado).toFixed(2),
+                            renta: parseFloat(pago.renta.isr).toFixed(2),
+                            ausencias: parseFloat(pago.ausencias.descuento).toFixed(2),
+                            descuentos_ciclicos: parseFloat(pago.descuentos_ciclicos).toFixed(2),
+                            otros_descuentos: parseFloat(pago.otros_descuentos).toFixed(2),
+                            total: parseFloat(pago.salario_neto).toFixed(2)
+                        }
+                    })
+                }
+            });
+        })
+
+        return res.status(200).json({
+            ok: true,
+            message: 'Empleados encontrados',
+            empleados: empleados
+        });
+    }catch (e) {
+        console.log(e);
+        return res.status(500).json({
+            ok: false,
+            message: 'Error interno del servidor'
+        });
+    }
+}
+
+exports.obtenerBoleta = async (req, res) => {
+    try {
+        const id_boleta = req.params.id_boleta;
+        const id_empleado = req.params.id_empleado;
+        let boleta = await Empleados.findById(id_empleado)
+          .select("codigo datos_personales pagos codigo")
+          .populate("datos_laborales.cargo")
+          .lean()
+          .then((empleado) => {
+            let pago = empleado.pagos.find((pago) => pago._id == id_boleta);
+
+            if (!pago) {
+              return res.status(400).json({
+                ok: false,
+                message: "La boleta no existe",
+              });
+            }
+
+            return {
+              id: pago._id,
+              fecha: pago.fecha,
+              correlativo:
+                pago.correlativo.anio +
+                "" +
+                `0${pago.correlativo.mes}`.slice(-2) +
+                "" +
+                empleado.codigo +
+                "" +
+                pago.correlativo.quincena,
+              incapacidad: parseFloat(pago.incapacidad.obligatorio).toFixed(2),
+              salario_quincenal: parseFloat(pago.salario_quincenal).toFixed(2),
+              vacacion: parseFloat(pago.vacacion?.prima).toFixed(2),
+              otros_ingresos: parseFloat(pago.otros_ingresos).toFixed(2),
+              isss: parseFloat(pago.isss.empleado).toFixed(2),
+              afp: parseFloat(pago.afp.empleado).toFixed(2),
+              renta: parseFloat(pago.renta.isr).toFixed(2),
+              ausencias: parseFloat(pago.ausencias.descuento).toFixed(2),
+              descuentos_ciclicos: parseFloat(pago.descuentos_ciclicos).toFixed(2),
+              salario_neto: parseFloat(pago.salario_neto).toFixed(2),
+              otros_descuentos: parseFloat(pago.otros_descuentos).toFixed(2),
+              dias_trabajados: pago.dias_trabajados,
+              empleado: {
+                codigo: empleado.codigo,
+                datos_personales: empleado.datos_personales,
+                datos_laborales: empleado.datos_laborales,
+              },
+            };
+          });
+
+        return res.status(200).json({
+            ok: true,
+            message: 'Empleados encontrados',
+            boleta: boleta
+        });
+    }catch (e) {
+        console.log(e);
         return res.status(500).json({
             ok: false,
             message: 'Error interno del servidor'
