@@ -48,3 +48,25 @@ exports.pagoJson = (anio, mes,quincena, motivo) => {
       otros_descuentos: 0,
     }
   }
+
+
+exports.pagoTotal = {
+    salario_neto: 0,
+    salario_bruto: 0,
+    salario_quincenal: 0,
+    incapacidad_obligatorio: 0,
+    incapacidad_remunerado: 0,
+    ausencias: 0,
+    vacacion: 0,
+    otros_ingresos: 0,
+    ingresos_no_gravados: 0,
+    insaforp: 0,
+    isss: 0,
+    isss_patrono: 0,
+    afp: 0,
+    afp_patrono: 0,
+    renta: 0,
+    renta_devolucion: 0,
+    descuentos_ciclicos: 0,
+    otros_descuentos: 0
+}
