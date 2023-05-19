@@ -10,7 +10,6 @@ const generarBoletaPago = (
   mes,
   quincena
 ) => {
-
   // salario quincenal
   const salarioQuincenal = empleado.datos_laborales.cargo.salario / 2;
   const diasQuincena = 15;
@@ -50,38 +49,32 @@ const generarBoletaPago = (
 
   //salario bruto
   boleta.salario_bruto =
-      boleta.salario_quincenal +
-      boleta.incapacidad.obligatorio + 
-      boleta.incapacidad.remunerado +
-      boleta.vacacion.prima +
-      boleta.extraordinarios +
-      boleta.otros_ingresos;
+    boleta.salario_quincenal +
+    boleta.incapacidad.obligatorio +
+    boleta.incapacidad.remunerado +
+    boleta.vacacion.prima +
+    boleta.extraordinarios +
+    boleta.otros_ingresos;
 
   boleta.ingresos_no_gravados =
-    boleta.otros_ingresos +
-    boleta.incapacidad.remunerado;
+    boleta.otros_ingresos + boleta.incapacidad.remunerado;
 
-  boleta.ss_base_calculo =
-    boleta.salario_bruto - boleta.ingresos_no_gravados;
+  boleta.ss_base_calculo = boleta.salario_bruto - boleta.ingresos_no_gravados;
 
-  boleta.insaforp =
-    cantEmp > 10
-      ? boleta.ss_base_calculo * 0.01
-      : 0;
+  boleta.insaforp = cantEmp > 10 ? boleta.ss_base_calculo * 0.01 : 0;
 
   boleta.isss.patrono = boleta.ss_base_calculo * prestaciones.ISSS.patrono;
   boleta.isss.empleado =
-    (boleta.ss_base_calculo *
-    prestaciones.ISSS.empleado) > prestaciones.ISSS.limite.quince
+    boleta.ss_base_calculo * prestaciones.ISSS.empleado >
+    prestaciones.ISSS.limite.quince
       ? prestaciones.ISSS.limite.quince
       : boleta.ss_base_calculo * prestaciones.ISSS.empleado;
 
   boleta.afp.patrono = boleta.ss_base_calculo * prestaciones.AFP.patrono;
   boleta.afp.empleado = boleta.ss_base_calculo * prestaciones.AFP.empleado;
 
-  boleta.isr_base_calculo = boleta.ss_base_calculo 
-  - boleta.isss.empleado 
-  - boleta.afp.empleado;
+  boleta.isr_base_calculo =
+    boleta.ss_base_calculo - boleta.isss.empleado - boleta.afp.empleado;
 
   const tramo = prestaciones.RENTA.tablas_retencion.quince.find((tramo) => {
     return tramo.desde <= salarioQuincenal && tramo.hasta >= salarioQuincenal;
@@ -93,24 +86,32 @@ const generarBoletaPago = (
     boleta.isss.empleado -
     boleta.afp.empleado -
     boleta.renta.isr -
-    boleta.descuentos_ciclicos - 
+    boleta.descuentos_ciclicos -
     boleta.otros_descuentos;
 
-  console.log(boleta);
   return boleta;
 };
 
 exports.generarBoletasPago = async (req, res) => {
-  const anio = moment().year();
-  const mes = moment().month() + 1;
-  const quincena = moment().date() <= 15 ? 1 : 2;
+  let { anio, mes, quincena } = req.body;
+
+  anio =
+    anio !== undefined && anio !== null && anio !== 0 ? anio : moment().year();
+  mes =
+    mes !== undefined && mes !== null && mes !== 0 ? mes : moment().month() + 1;
+  quincena =
+    quincena !== undefined && quincena !== null && quincena !== 0
+      ? quincena
+      : moment().date() <= 15
+      ? 1
+      : 2;
 
   const prestaciones = await Prestaciones.findOne({}).lean();
 
   let boletas = {
     generadas: [],
-    existentes: []
-  }
+    existentes: [],
+  };
 
   Empleados.find({
     $or: [
@@ -124,23 +125,18 @@ exports.generarBoletasPago = async (req, res) => {
   })
     .populate("datos_laborales.cargo")
     .then((empleados) => {
-      console.log(typeof empleados)
       const cantEmpleados = empleados.length;
       empleados.forEach((empleado) => {
-
         let existe = empleado.pagos.find((pago) => {
-          return pago.correlativo.anio === anio 
-          && pago.correlativo.mes === mes 
-          && pago.correlativo.quincena === quincena;
+          return (
+            pago.correlativo.anio == anio &&
+            pago.correlativo.mes == mes &&
+            pago.correlativo.quincena == quincena
+          );
         });
-          
-        if(existe){
-          boletas.existentes.push(empleado.datos_personales.nombres + " " + empleado.datos_personales.apellidos);
-          return;
-        } else{
-          boletas.generadas.push(empleado.datos_personales.nombres + " " + empleado.datos_personales.apellidos);
-        }
-          
+
+        if (existe !== undefined) return;
+
         empleado.pagos.push(
           generarBoletaPago(
             empleado,
@@ -152,39 +148,41 @@ exports.generarBoletasPago = async (req, res) => {
           )
         );
 
+        if(mes == 12 && quincena == 2){
+          const boleta = pagoJson(anio, mes, quincena, "Indemnización");
+          boleta.salario_neto = calculoIndemnizacion(
+            empleado.datos_laborales.fecha_ingreso, empleado.datos_laborales.cargo.salario, anio);
+          boleta.salario_bruto = boleta.salario_neto;
+          empleado.pagos.push(
+            boleta
+          );
+        }
+
         empleado.save();
       });
 
       return res.status(200).json({
         ok: true,
         message: "Boletas de pago generadas",
-        msg: {
-          generadas: boletas.generadas.length > 0 
-          ? "Boletas generadas en la quincena actual para: " + boletas.generadas.join(", ") 
-          : "No se generaron boletas en la quincena actual",
-          existentes: boletas.existentes.length > 0
-          ? "Boletas ya existentes en la quincena actual para: " + boletas.existentes.join(", ")
-          : ""
-        }
       });
     });
 };
 
 const calculoIncapacidades = (incapacidades, salario, anio, mes, quincena) => {
-  
   mes = mes < 10 ? `0${mes}` : mes;
-  const fechaInicio = quincena === 1 
-  ? moment(`${anio}-${mes}-${25}`).subtract(1, "month")
-  : moment(`${anio}-${mes}-${10}`);
+  const fechaInicio =
+    quincena == 1
+      ? moment(`${anio}-${mes}-${25}`).subtract(1, "month")
+      : moment(`${anio}-${mes}-${10}`);
 
-  const fechaFin = quincena === 1
-  ? moment(`${anio}-${mes}-${9}`)
-  : moment(`${anio}-${mes}-${24}`);
-  
+  const fechaFin =
+    quincena == 1
+      ? moment(`${anio}-${mes}-0${9}`)
+      : moment(`${anio}-${mes}-${24}`);
 
   const incapa = incapacidades.filter((incapacidad) => {
     const fecha = moment(incapacidad.fecha);
-    return (fecha.isBetween(fechaInicio, fechaFin, "days", "[]"));
+    return fecha.isBetween(fechaInicio, fechaFin, "days", "[]");
   });
 
   const dias = incapa.reduce((total, incapacidad) => {
@@ -217,19 +215,19 @@ const calculoIncapacidades = (incapacidades, salario, anio, mes, quincena) => {
 
 const calculoAusencias = (ausencias, salario, anio, mes, quincena) => {
   mes = mes < 10 ? `0${mes}` : mes;
-  const fechaInicio = quincena === 1 
-  ? moment(`${anio}-${mes}-${25}`).subtract(1, "month")
-  : moment(`${anio}-${mes}-${10}`);
+  const fechaInicio =
+    quincena == 1
+      ? moment(`${anio}-${mes}-${25}`).subtract(1, "month")
+      : moment(`${anio}-${mes}-${10}`);
 
-  const fechaFin = quincena === 1
-  ? moment(`${anio}-${mes}-${9}`)
-  : moment(`${anio}-${mes}-${24}`);
+  const fechaFin =
+    quincena == 1
+      ? moment(`${anio}-${mes}-0${9}`)
+      : moment(`${anio}-${mes}-${24}`);
 
   const aus = ausencias.filter((ausencia) => {
     const fecha = moment(ausencia.fecha);
-    return (
-      fecha.isBetween(fechaInicio, fechaFin, "days", "[]") 
-    );
+    return fecha.isBetween(fechaInicio, fechaFin, "days", "[]");
   });
 
   const dias = aus.length;
@@ -252,33 +250,59 @@ const calculoVacaciones = (vacas, salario, anio, mes, quincena) => {
     };
   }
 
-  const fechaPago = moment().year(anio).month(mes - 1).date(quincena === 1 ? 15 : (mes === 2 ? 28 : 30));
+  const date = mes == 2 ? 28 : 30;
 
-  let sigFechaPago = quincena === 1 
-  ? fechaPago.date(mes === 2 ? 28 : 30)
-  : fechaPago.clone().add(1, "month").date(15);
+  const fechaPago = moment()
+    .year(anio)
+    .month(mes - 1)
+    .date(quincena == 1 ? 15 : date);
 
+  let sigFechaPago =
+    quincena == 1
+      ? fechaPago.date(date)
+      : fechaPago.clone().add(1, "month").date(15);
+
+    console.log(fechaPago, sigFechaPago);
   let vacaciones = periodos.find((periodo) => {
     let fechaInicio = moment(periodo.desde);
     return fechaInicio.isAfter(fechaPago) && fechaInicio.isBefore(sigFechaPago);
   });
-  
-  console.log(vacaciones)
 
-  let dias = !!vacaciones 
-  ? moment(vacaciones.hasta).diff(moment(vacaciones.desde), "days") + 1
-  : 0;
+  let dias = !!vacaciones
+    ? moment(vacaciones.hasta).diff(moment(vacaciones.desde), "days") + 1
+    : 0;
 
   return !!vacaciones
-  ? {
-    dias: dias,
-    prima: salario * dias * vacas.porcentaje
-  } : {
-    dias: 0,
-    prima: 0
-  }
-  
-
+    ? {
+        dias: dias,
+        prima: salario * dias * vacas.porcentaje,
+      }
+    : {
+        dias: 0,
+        prima: 0,
+      };
 };
 
-
+const calculoIndemnizacion = (fecha_contratacion, salario, year) => {
+  // caso: pago indemnizacion anual
+  fecha_contratacion = moment(fecha_contratacion);
+  salario = parseFloat(salario);
+  const finAnio = moment(`${year}-12-31`);
+  const mesesTrabajados = finAnio.diff(fecha_contratacion, "months");
+  const aniosTrabajados = finAnio.diff(fecha_contratacion, "years");
+  let indemnizacionCalculada;
+  if (mesesTrabajados < 12) return 0;
+  if (aniosTrabajados >= 2) {
+    indemnizacionCalculada = salario;
+  } else {
+    const salarioPorDia = salario / 360;
+    const anio = fecha_contratacion.add(1, "year");
+    const diasRestantesDelAnio = finAnio.diff(anio, "days");
+    console.log(anio)
+    console.log(salario, salarioPorDia, diasRestantesDelAnio)
+    console.log(salarioPorDia * parseFloat(diasRestantesDelAnio))
+    indemnizacionCalculada = salario + salarioPorDia * parseFloat(diasRestantesDelAnio);
+  }
+  console.log(indemnizacionCalculada);
+  return parseFloat(indemnizacionCalculada).toFixed(2)
+};

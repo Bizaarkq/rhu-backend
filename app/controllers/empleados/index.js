@@ -1,4 +1,6 @@
-const {Empleados, Plazas} = require('../../models');
+const {Empleados, Plazas, Departamentos} = require('../../models');
+const pagoTotal = require('./pago-format').pagoTotal;
+
 
 exports.crearEmpleado = async (req, res) => {
 
@@ -224,7 +226,7 @@ exports.obtenerEmpleadosBoletas = async (req, res) => {
                             incapacidad: parseFloat(pago.incapacidad.obligatorio).toFixed(2),
                             salario_quincenal: parseFloat(pago.salario_quincenal).toFixed(2),
                             vacacion: parseFloat(pago.vacacion?.prima).toFixed(2),
-                            otros_ingresos: parseFloat(pago.otros_ingresos).toFixed(2),
+                            ingresos_no_gravados: parseFloat(pago.ingresos_no_gravados).toFixed(2),
                             isss: parseFloat(pago.isss.empleado).toFixed(2),
                             afp: parseFloat(pago.afp.empleado).toFixed(2),
                             renta: parseFloat(pago.renta.isr).toFixed(2),
@@ -238,10 +240,20 @@ exports.obtenerEmpleadosBoletas = async (req, res) => {
             });
         })
 
+        const sortedPagos = empleados.map(empleado => {
+            return {
+                ...empleado,
+                pagos: empleado.pagos.sort((a, b) => {
+                    return a.correlativo < b.correlativo ? -1 : 
+                    a.correlativo > b.correlativo ? 1 : 0;
+                })
+            }
+        });
+
         return res.status(200).json({
             ok: true,
             message: 'Empleados encontrados',
-            empleados: empleados
+            empleados: sortedPagos
         });
     }catch (e) {
         console.log(e);
@@ -291,6 +303,7 @@ exports.obtenerBoleta = async (req, res) => {
               ausencias: parseFloat(pago.ausencias.descuento).toFixed(2),
               descuentos_ciclicos: parseFloat(pago.descuentos_ciclicos).toFixed(2),
               salario_neto: parseFloat(pago.salario_neto).toFixed(2),
+              ingresos_no_gravados: parseFloat(pago.ingresos_no_gravados).toFixed(2),
               otros_descuentos: parseFloat(pago.otros_descuentos).toFixed(2),
               dias_trabajados: pago.dias_trabajados,
               empleado: {
@@ -313,4 +326,116 @@ exports.obtenerBoleta = async (req, res) => {
             message: 'Error interno del servidor'
         });
     }
+}
+
+exports.obtenerPlanilla = async (req, res) => {
+    const {
+        anio,
+        mes,
+        quincena
+    } = req.params;
+
+    try {
+
+        let totales = {...pagoTotal};
+
+        Empleados.find({
+            'pagos.correlativo.anio': anio,
+            'pagos.correlativo.mes': mes,
+            'pagos.correlativo.quincena': quincena
+        })
+        .populate('datos_laborales.cargo', 'puesto salario')
+        .populate({
+            path: 'datos_laborales.cargo',
+            populate: {
+                path: 'departamento',
+                model: 'departamentos',
+                select: 'nombre'
+            }
+        })
+        .lean()
+        .then(empleados => {
+
+            const empleadosMap = empleados.map(empleado => {
+                const pago = empleado.pagos.filter(pago => {
+                    return pago.correlativo.anio == anio
+                    && pago.correlativo.mes == mes
+                    && pago.correlativo.quincena == quincena
+                }).map(pago => {
+                    return {
+                        id: pago._id,
+                        fecha: pago.fecha,
+                        correlativo: pago.correlativo.anio + ""
+                        + `0${pago.correlativo.mes}`.slice(-2) + ""
+                        + empleado.codigo + ""
+                        + pago.correlativo.quincena,
+                        salario_mensual: parseFloat(empleado.datos_laborales.cargo.salario).toFixed(2),
+                        dias_trabajados: pago.dias_trabajados,
+                        salario_neto: parseFloat(pago.salario_neto).toFixed(2),
+                        salario_bruto: parseFloat(pago.salario_bruto).toFixed(2),
+                        salario_quincenal: parseFloat(pago.salario_quincenal).toFixed(2),
+                        ss_base_calculo: parseFloat(pago.ss_base_calculo).toFixed(2),
+                        isr_base_calculo: parseFloat(pago.isr_base_calculo).toFixed(2),
+                        incapacidad_dias: pago.incapacidad.dias,
+                        incapacidad_obligatorio: parseFloat(pago.incapacidad.obligatorio).toFixed(2),
+                        incapacidad_remunerado: parseFloat(pago.incapacidad.remunerado).toFixed(2),
+                        ausencias: parseFloat(pago.ausencias.descuento).toFixed(2),
+                        ausencias_dias: pago.ausencias.dias,
+                        vacacion: parseFloat(pago.vacacion?.prima).toFixed(2),
+                        otros_ingresos: parseFloat(pago.otros_ingresos).toFixed(2),
+                        ingresos_no_gravados: parseFloat(pago.ingresos_no_gravados).toFixed(2),
+                        insaforp: parseFloat(pago.insaforp).toFixed(2),
+                        isss: parseFloat(pago.isss.empleado).toFixed(2),
+                        isss_patrono: parseFloat(pago.isss.patrono).toFixed(2),
+                        afp: parseFloat(pago.afp.empleado).toFixed(2),
+                        afp_patrono: parseFloat(pago.afp.patrono).toFixed(2),
+                        renta: parseFloat(pago.renta.isr).toFixed(2),
+                        renta_devolucion: parseFloat(pago.renta.devolucion).toFixed(2),
+                        descuentos_ciclicos: parseFloat(pago.descuentos_ciclicos).toFixed(2),
+                        otros_descuentos: parseFloat(pago.otros_descuentos).toFixed(2)
+                    }
+                })
+
+                const dat_lab = empleado.datos_laborales;
+
+                const emp = {
+                    codigo: empleado.codigo,
+                    nombre: empleado.datos_personales.nombres + " " + empleado.datos_personales.apellidos,
+                    cargo: dat_lab.cargo.plaza,
+                    departamento: dat_lab.cargo.departamento.nombre,
+                }
+
+                totales = sumarPago(totales, pago[0]);
+
+                return  {
+                    ...pago[0],
+                    ...emp
+                }
+            })
+            
+            
+            return res.status(200).json({
+                ok: true,
+                message: 'Empleados encontrados',
+                empleados : empleadosMap,
+                totales: totales
+            });
+        });
+
+    }catch (e) {
+        console.log(e);
+        return res.status(500).json({
+            ok: false,
+            message: 'Error interno del servidor'
+        });
+    }
+}
+
+const sumarPago = (totales, pago) => {
+    Object.keys(totales).forEach(key => {
+        totales[key] = (parseFloat(pago[key])
+            + parseFloat(totales[key])).toFixed(2);
+    });
+
+    return totales;
 }

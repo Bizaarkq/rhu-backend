@@ -8,6 +8,7 @@ routes.post('/update/:id', controller.actualizarEmpleado);
 routes.post('/despedir/:id', controller.despedirEmpleado);
 routes.get('/boletas', controller.obtenerEmpleadosBoletas);
 routes.get('/boletas/:id_empleado/:id_boleta', controller.obtenerBoleta);
+routes.get('/planilla/get/:anio/:mes/:quincena', controller.obtenerPlanilla);
 
 
 module.exports = routes;
