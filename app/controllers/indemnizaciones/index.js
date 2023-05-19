@@ -25,17 +25,11 @@ exports.crearIndemnizacion = async (req, res) => {
         // caso de despido
         const salida = moment(fecha);
         const mesesTrabajados = salida.diff(fecha_contratacion, 'months');
-        if(mesesTrabajados < 12){
-            return res.status(400).json({
-                ok: false,
-                message: 'El empleado no cumple con el requisito del año para la indemnización'
-            });
-        }
         empleado.datos_laborales.fecha_salida = fecha;
         await empleado.save();
         const diasTrabajados = salida.diff(inicioAnio, 'days');
         const salarioPorDia = salario/360;
-        const indemnizacionCalculada = salarioPorDia*diasTrabajados;
+        const indemnizacionCalculada = mesesTrabajados < 12 ? 0 : salarioPorDia*diasTrabajados;
 
         let indemnizacion = new Indemnizaciones({
             fecha_contratacion,
